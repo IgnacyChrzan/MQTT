@@ -1,0 +1,28 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4024.13">
+  <POU Name="MAIN" Id="{f5bd4718-2552-47f9-921d-cb1f6b642716}" SpecialFunc="None">
+    <Declaration><![CDATA[PROGRAM MAIN
+VAR
+	StepAxis	:	AXIS_REF;
+	ServoAxis	:	AXIS_REF;
+	fbCoupling	:	FB_Coupling;
+	fbMqtt		:	FB_MQTT;
+	fbSequence	:	FB_Sequence;
+END_VAR
+]]></Declaration>
+    <Implementation>
+      <ST><![CDATA[
+fbMqtt();
+GVL_PLC.lrActPosition := ServoAxis.NcToPlc.ActPos;
+
+fbSequence(ServoAxis:=ServoAxis,StepAxis:=StepAxis);]]></ST>
+    </Implementation>
+    <LineIds Name="MAIN">
+      <LineId Id="29" Count="0" />
+      <LineId Id="11" Count="0" />
+      <LineId Id="8" Count="0" />
+      <LineId Id="48" Count="0" />
+      <LineId Id="39" Count="0" />
+    </LineIds>
+  </POU>
+</TcPlcObject>

@@ -1,0 +1,61 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4024.13">
+  <POU Name="FB_MQTT" Id="{5c2cc3aa-fcf3-4995-b729-021174388826}" SpecialFunc="None">
+    <Declaration><![CDATA[FUNCTION_BLOCK FB_MQTT
+VAR
+		//MQTT
+	sBrokerIP	: 			STRING:='192.168.8.101';	// Beckhoff IP
+	uiPortNumber:			UINT:=1883;				// Port using for mqtt exchange 
+	sPrefix		:			STRING:='MQTT/cseg';	// Prefix of mqtt server
+	sTopic		:			STRING:='/PositionOfMotor';	// Topic in which our variable is being saved 
+	bInitialize :			BOOL;
+	bConnect	:			BOOL;
+	
+	// MQTT Function Blocks 
+	fbMQTTClient	:		FB_IotMqttClient;
+	fbMQTTMessage	:		FB_IotMqttMessage;
+	fbMQTTMessageQueue:		FB_IotMqttMessageQueue;
+	
+	tonPublishingData	:	TON;
+	sMessage		:		STRING;
+	
+	bRetain:BOOL;
+	bQueue:BOOL;
+END_VAR
+]]></Declaration>
+    <Implementation>
+      <ST><![CDATA[// Setting variables for connection
+IF bInitialize THEN
+	bInitialize:=FALSE;
+	fbMQTTClient.sHostName := sBrokerIP;
+	fbMQTTClient.nHostPort := uiPortNumber;
+	fbMQTTClient.sTopicPrefix := sPrefix;
+	fbMQTTClient.ipMessageQueue := fbMQTTMessageQueue;
+	
+ 	bConnect := TRUE;
+END_IF
+
+fbMQTTClient.Execute(bConnect);
+
+IF fbMQTTClient.bConnected THEN
+	tonPublishingData(IN:= NOT tonPublishingData.Q , PT:=T#3S); // Publishing every 1s
+	IF tonPublishingData.Q THEN
+		sMessage := CONCAT('Motor Position: ',LREAL_TO_STRING(GVL_PLC.lrActPosition)); 	// Writing motor Position into broker
+		fbMQTTClient.Publish(
+					sTopic:=sTopic , 
+					nPayloadSize:=INT_TO_UDINT(LEN(sMessage)) , 
+					pPayload:=ADR(sMessage) , 
+					eQoS:= TcIotMqttQos.AtLeastOnceDelivery , 
+					bRetain:=FALSE , 
+					bQueue:=FALSE );
+	END_IF
+END_IF]]></ST>
+    </Implementation>
+    <LineIds Name="FB_MQTT">
+      <LineId Id="191" Count="3" />
+      <LineId Id="263" Count="0" />
+      <LineId Id="196" Count="19" />
+      <LineId Id="248" Count="0" />
+    </LineIds>
+  </POU>
+</TcPlcObject>

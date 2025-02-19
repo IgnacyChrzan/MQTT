@@ -1,0 +1,273 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4024.13">
+  <POU Name="FB_Sequence" Id="{78c0308a-89d8-46d6-9315-ac5ef803a704}" SpecialFunc="None">
+    <Declaration><![CDATA[FUNCTION_BLOCK FB_Sequence
+VAR_IN_OUT
+	ServoAxis	:	AXIS_REF;
+	StepAxis	:	AXIS_REF;
+END_VAR
+VAR
+	Slave		:	AXIS_REF;
+	Master		:	AXIS_REF;
+	fbGearIn	:	MC_GearIn;
+	fbMoveAbsolute	:	MC_MoveAbsolute;
+	fbMoveAbsoluteStep	:	MC_MoveAbsolute;
+	fbGearOut	:	MC_GearOut;
+	xGearIn		:	BOOL;
+	xGearOut	:	BOOL;
+    lrRatioNumerator   : LREAL:=1;
+    uiRatioDenominator : UINT:=1;
+	fbResetServo 	: 			MC_Reset;
+	fbResetStep 	: 			MC_Reset;
+	fbPowerServo 	: 			MC_Power;
+	fbPowerStep	: 			MC_Power;
+	xManualReset	 : 		BOOL; // Resetting program
+	xPowerOn	:			BOOL; //Enabling power sources
+	xExecute	:			BOOL; // Executing program
+	eStateMc 	: 			E_MC ;//instance of enum
+	xStepIsMaster		:		BOOL;
+	xStepIsSlave	:		BOOL;
+	lrPosition	: 			LREAL; //Target Position
+	lrVelocity 	:			LREAL; // Setting Velocity
+	lrRealPosition:			LREAL;
+	xButton_NO2 	AT%I* : BOOL;
+	fTrigger			:	F_TRIG;
+	xStartSequence		:	BOOL;
+	iNumberOfCycles		:	INT;
+	xResetErrors		:	BOOL;
+END_VAR
+
+]]></Declaration>
+    <Implementation>
+      <ST><![CDATA[fTrigger(CLK:=xButton_NO2 , Q=>xStartSequence );
+lrRealPosition:=ServoAxis.NcToPlc.ActPos;
+CASE eStateMc OF
+	E_MC.Idle:									// Start of the program
+		IF xStartSequence THEN
+			xStartSequence:=FALSE;
+			iNumberOfCycles:=2;
+			eStateMc:=E_MC.RestartCall;
+		END_IF
+	E_MC.RestartCall:							// Calling reset of the errors
+		xManualReset:=TRUE;							
+		IF fbResetServo.Busy AND fbResetStep.Busy THEN
+				eStateMc:=E_MC.RestartExecute;					
+		ELSIF	fbResetServo.Error OR fbResetStep.Error THEN
+			eStateMc:=E_MC.Error;
+		END_IF
+	E_MC.RestartExecute:						// Executing reset 
+		xManualReset:=FALSE;
+		IF fbResetServo.Done AND fbResetStep.Done THEN
+			eStateMc:=E_MC.PowerCall;
+		ELSIF	fbResetServo.Error OR fbResetStep.Error THEN
+			eStateMc:=E_MC.Error;
+		END_IF
+		
+	E_MC.PowerCall:								// Calling power enable
+		xPowerOn:=TRUE;
+		IF fbPowerServo.Busy AND fbPowerStep.Busy THEN
+				eStateMc:=E_MC.PowerExecute;
+		ELSIF	fbPowerServo.Error OR fbPowerStep.Error THEN
+			eStateMc:=E_MC.Error;
+		END_IF
+	E_MC.PowerExecute:
+		IF fbPowerServo.Status AND fbPowerStep.Status THEN
+			eStateMc:=E_MC.CoupleCall;
+		ELSIF	fbPowerServo.Error OR fbPowerStep.Error THEN
+			eStateMc:=E_MC.Error;
+		END_IF
+	
+	E_MC.CoupleCall:
+		IF iNumberOfCycles=1 THEN
+			Master := StepAxis;
+			Slave  := ServoAxis;
+			xGearIn:=TRUE;
+			IF fbGearIn.Busy THEN
+				eStateMc:=E_MC.CoupleExecute;
+			END_IF
+		ELSIF iNumberOfCycles=2 THEN	
+			Master := ServoAxis;
+			Slave  := StepAxis;
+			xGearIn:=TRUE;
+		END_IF
+			IF fbGearIn.Busy THEN
+				eStateMc:=E_MC.CoupleExecute;
+			END_IF			
+		IF fbGearIn.Error THEN
+			eStateMc:=E_MC.Error;
+		END_IF
+	E_MC.CoupleExecute:
+		IF fbGearIn.InGear THEN
+			eStateMc:=E_MC.MoveAbsCall;
+		ELSIF fbGearIn.Error THEN
+			eStateMc:=E_MC.Error;
+		END_IF		
+	E_MC.MoveAbsCall:
+		IF iNumberOfCycles=1 THEN
+			lrPosition:=0;
+			lrVelocity:=100;
+			xExecute:=TRUE;
+			IF fbMoveAbsolute.Busy THEN
+					eStateMc := E_MC.MoveAbsExecute;
+			END_IF
+		ELSIF iNumberOfCycles=2 THEN
+			lrPosition:=720;
+			lrVelocity:=100;
+			xExecute:=TRUE;
+			IF fbMoveAbsolute.Busy THEN
+					eStateMc := E_MC.MoveAbsExecute;
+			END_IF
+		END_IF
+		IF fbMoveAbsolute.Error THEN
+			eStateMc:=E_MC.Error;
+		END_IF
+	E_MC.MoveAbsExecute:
+		xExecute:=FALSE;
+		IF iNumberOfCycles=2 THEN
+		IF StepAxis.NcToPlc.AxisState=0 THEN
+			eStateMc:=E_MC.DecoupleCall;
+		END_IF
+		END_IF
+		IF fbMoveAbsolute.Error THEN
+			eStateMc:=E_MC.Error;
+		END_IF		
+	E_MC.DecoupleCall:
+		xGearOut:=TRUE;
+		IF fbGearOut.Busy THEN
+			eStateMc:=E_MC.DecoupleExecute;		
+		ELSIF fbGearOut.Error THEN
+			eStateMc:=E_MC.Error;
+		END_IF	
+	E_MC.DecoupleExecute:
+		xGearOut:=FALSE;
+		IF fbGearOut.Done AND iNumberOfCycles=1 THEN
+			eStateMc:=E_MC.CoupleCall;
+		ELSIF fbGearOut.Done AND iNumberOfCycles=2 THEN
+			eStateMc:=E_MC.Idle;
+		END_IF
+		IF fbGearOut.Error THEN
+			eStateMc:=E_MC.Error;
+		END_IF	
+	E_MC.Error:
+		xPowerOn:=FALSE;
+		IF xResetErrors THEN
+			eStateMc:=E_MC.Idle;
+		END_IF
+END_CASE
+
+//SERVO MOTOR
+fbResetServo(				//Reseting motor // Reset1 -> ResetServoMotor
+	Axis:= ServoAxis, 
+	Execute:= xManualReset, 
+	Done=> , 
+	Busy=> , 
+	Error=> , 
+	ErrorID=> );
+	
+fbPowerServo(				// Turning power on
+	Axis:= ServoAxis, 
+	Enable:= xPowerOn, 
+	Enable_Positive:= xPowerOn, 
+	Enable_Negative:= xPowerOn, 
+	Override:= 100, 
+	BufferMode:= , 
+	Options:= , 
+	Status=> , 
+	Busy=> , 
+	Error=> , 
+	ErrorID=> );
+	
+	
+//STEP MOTOR
+fbResetStep(				//Reseting motor
+	Axis:= StepAxis, 
+	Execute:= xManualReset, 
+	Done=> , 
+	Busy=> , 
+	Error=> , 
+	ErrorID=> );
+	
+fbPowerStep(				// Turning power on
+	Axis:= StepAxis, 
+	Enable:= xPowerOn, 
+	Enable_Positive:= xPowerOn, 
+	Enable_Negative:= xPowerOn, 
+	Override:= 100, 
+	BufferMode:= , 
+	Options:= , 
+	Status=> , 
+	Busy=> , 
+	Error=> , 
+	ErrorID=> );
+	
+	
+fbMoveAbsolute(			// Executing program
+	Axis:= Master, 
+	Execute:= xExecute, 
+	Position:=lrPosition, 
+	Velocity:= lrVelocity, 
+	Acceleration:= 0, 
+	Deceleration:= , 
+	Jerk:= , 
+	BufferMode:= , 
+	Options:= , 
+	Done=> , 
+	Busy=> , 
+	Active=> , 
+	CommandAborted=> , 
+	Error=> , 
+	ErrorID=> );
+fbMoveAbsoluteStep(			// Executing program
+	Axis:= StepAxis, 
+	Execute:= xExecute, 
+	Position:=lrPosition, 
+	Velocity:= lrVelocity, 
+	Acceleration:= 0, 
+	Deceleration:= , 
+	Jerk:= , 
+	BufferMode:= , 
+	Options:= , 
+	Done=> , 
+	Busy=> , 
+	Active=> , 
+	CommandAborted=> , 
+	Error=> , 
+	ErrorID=> );
+fbGearIn(
+		Master:=Master , 
+		Slave:=Slave , 
+		Execute:=xGearIn , 
+		RatioNumerator:=lrRatioNumerator , 
+		RatioDenominator:= uiRatioDenominator, 
+		Acceleration:= , 
+		Deceleration:= , 
+		Jerk:= , 
+		BufferMode:= , 
+		Options:= , 
+		InGear=> , 
+		Busy=> , 
+		Active=> , 
+		CommandAborted=> , 
+		Error=> , 
+		ErrorID=> );
+	
+fbGearOut(
+		Slave:= Slave, 
+		Execute:=xGearOut , 
+		Options:= , 
+		Done=> , 
+		Busy=> , 
+		Error=> , 
+		ErrorID=> );
+]]></ST>
+    </Implementation>
+    <LineIds Name="FB_Sequence">
+      <LineId Id="1577" Count="88" />
+      <LineId Id="1671" Count="88" />
+      <LineId Id="1789" Count="14" />
+      <LineId Id="1788" Count="0" />
+      <LineId Id="1760" Count="25" />
+      <LineId Id="45" Count="0" />
+    </LineIds>
+  </POU>
+</TcPlcObject>

@@ -1,0 +1,24 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4024.13">
+  <DUT Name="E_MC" Id="{5a8aa116-8988-4c54-9c97-7874ed0f2b92}">
+    <Declaration><![CDATA[{attribute 'qualified_only'}
+{attribute 'strict'}
+TYPE E_MC :
+(
+	Idle,
+	RestartCall,
+	RestartExecute,
+	PowerCall,
+	PowerExecute,
+	CoupleCall,
+	CoupleExecute,
+	MoveAbsCall,
+	MoveAbsExecute,
+	DecoupleCall,
+	DecoupleExecute,
+	Error
+);
+END_TYPE
+]]></Declaration>
+  </DUT>
+</TcPlcObject>
