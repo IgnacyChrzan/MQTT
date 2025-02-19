@@ -97,8 +97,10 @@ CASE eStateMc OF
 			eStateMc:=E_MC.Error;
 		END_IF
 	E_MC.CoupleExecute:
-		IF fbGearIn.InGear THEN
-			eStateMc:=E_MC.MoveAbsCall;
+		IF fbGearIn.InGear AND
+			ServoAxis.Status.Coupled AND
+			StepAxis.Status.Coupled THEN
+			;//eStateMc:=E_MC.MoveAbsCall;
 		ELSIF fbGearIn.Error THEN
 			eStateMc:=E_MC.Error;
 		END_IF		
@@ -123,11 +125,14 @@ CASE eStateMc OF
 		END_IF
 	E_MC.MoveAbsExecute:
 		xExecute:=FALSE;
-		IF iNumberOfCycles=2 THEN
-		IF StepAxis.NcToPlc.AxisState=0 THEN
-			eStateMc:=E_MC.DecoupleCall;
+		IF fbMoveAbsolute.Done THEN
+			;
 		END_IF
-		END_IF
+//		IF iNumberOfCycles=2 THEN
+//		IF StepAxis.NcToPlc.AxisState=0 THEN
+//			eStateMc:=E_MC.DecoupleCall;
+//		END_IF
+//		END_IF
 		IF fbMoveAbsolute.Error THEN
 			eStateMc:=E_MC.Error;
 		END_IF		
@@ -154,7 +159,7 @@ CASE eStateMc OF
 			eStateMc:=E_MC.Idle;
 		END_IF
 END_CASE
-
+//przepisać krok po kroku program timery jak za długo w casie w jednym kroku napisać 
 //SERVO MOTOR
 fbResetServo(				//Reseting motor // Reset1 -> ResetServoMotor
 	Axis:= ServoAxis, 
@@ -217,22 +222,6 @@ fbMoveAbsolute(			// Executing program
 	CommandAborted=> , 
 	Error=> , 
 	ErrorID=> );
-fbMoveAbsoluteStep(			// Executing program
-	Axis:= StepAxis, 
-	Execute:= xExecute, 
-	Position:=lrPosition, 
-	Velocity:= lrVelocity, 
-	Acceleration:= 0, 
-	Deceleration:= , 
-	Jerk:= , 
-	BufferMode:= , 
-	Options:= , 
-	Done=> , 
-	Busy=> , 
-	Active=> , 
-	CommandAborted=> , 
-	Error=> , 
-	ErrorID=> );
 fbGearIn(
 		Master:=Master , 
 		Slave:=Slave , 
@@ -262,11 +251,12 @@ fbGearOut(
 ]]></ST>
     </Implementation>
     <LineIds Name="FB_Sequence">
-      <LineId Id="1577" Count="88" />
-      <LineId Id="1671" Count="88" />
-      <LineId Id="1789" Count="14" />
-      <LineId Id="1788" Count="0" />
-      <LineId Id="1760" Count="25" />
+      <LineId Id="1577" Count="58" />
+      <LineId Id="1810" Count="1" />
+      <LineId Id="1636" Count="24" />
+      <LineId Id="1806" Count="2" />
+      <LineId Id="1661" Count="4" />
+      <LineId Id="1671" Count="114" />
       <LineId Id="45" Count="0" />
     </LineIds>
   </POU>

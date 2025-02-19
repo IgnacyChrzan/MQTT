@@ -15,7 +15,10 @@ END_VAR
 fbMqtt();
 GVL_PLC.lrActPosition := ServoAxis.NcToPlc.ActPos;
 
-fbSequence(ServoAxis:=ServoAxis,StepAxis:=StepAxis);]]></ST>
+fbSequence(ServoAxis:=ServoAxis,StepAxis:=StepAxis);
+
+ServoAxis();
+StepAxis();]]></ST>
     </Implementation>
     <LineIds Name="MAIN">
       <LineId Id="29" Count="0" />
@@ -23,6 +26,9 @@ fbSequence(ServoAxis:=ServoAxis,StepAxis:=StepAxis);]]></ST>
       <LineId Id="8" Count="0" />
       <LineId Id="48" Count="0" />
       <LineId Id="39" Count="0" />
+      <LineId Id="58" Count="0" />
+      <LineId Id="57" Count="0" />
+      <LineId Id="59" Count="0" />
     </LineIds>
   </POU>
 </TcPlcObject>
