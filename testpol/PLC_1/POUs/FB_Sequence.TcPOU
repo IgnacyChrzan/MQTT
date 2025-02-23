@@ -143,12 +143,18 @@ CASE eStateMc OF
 		Master:=StepAxis;
 		xExecute:=FALSE;
 		IF fbMoveAbsolute.Done THEN
-			eStateMc:=E_MC.CoupleCallStepMaster;
+			eStateMc:=E_MC.Execute;
 		END_IF
 
 		IF fbMoveAbsolute.Error THEN
 			eStateMc:=E_MC.Error;
 		END_IF		
+	
+	E_MC.Execute:
+		IF 	xStartSequence THEN
+			xStartSequence:=FALSE;
+			eStateMc:=E_MC.CoupleCallStepMaster;
+		END_IF
 		
 	E_MC.CoupleCallStepMaster:
 		IF ServoAxis.Status.Coupled THEN
@@ -413,7 +419,9 @@ fbGearOut(
       <LineId Id="2143" Count="0" />
       <LineId Id="2185" Count="21" />
       <LineId Id="2184" Count="0" />
-      <LineId Id="2207" Count="0" />
+      <LineId Id="2207" Count="2" />
+      <LineId Id="2213" Count="0" />
+      <LineId Id="2210" Count="2" />
       <LineId Id="1615" Count="0" />
       <LineId Id="1906" Count="2" />
       <LineId Id="1617" Count="5" />
