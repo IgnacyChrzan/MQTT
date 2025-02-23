@@ -21,17 +21,11 @@
     <Compile Include="DUTs\E_MC.TcDUT">
       <SubType>Code</SubType>
     </Compile>
-    <Compile Include="DUTs\E_MC_STEP.TcDUT">
-      <SubType>Code</SubType>
-    </Compile>
     <Compile Include="GVLs\GVL_PLC.TcGVL">
       <SubType>Code</SubType>
       <LinkAlways>true</LinkAlways>
     </Compile>
     <Compile Include="PlcTask.TcTTO">
-      <SubType>Code</SubType>
-    </Compile>
-    <Compile Include="POUs\FB_Coupling.TcPOU">
       <SubType>Code</SubType>
     </Compile>
     <Compile Include="POUs\FB_Sequence.TcPOU">

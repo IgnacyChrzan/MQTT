@@ -5,7 +5,6 @@
 VAR
 	StepAxis	:	AXIS_REF;
 	ServoAxis	:	AXIS_REF;
-	fbCoupling	:	FB_Coupling;
 	fbMqtt		:	FB_MQTT;
 	fbSequence	:	FB_Sequence;
 END_VAR

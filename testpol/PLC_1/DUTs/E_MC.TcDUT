@@ -6,16 +6,34 @@
 TYPE E_MC :
 (
 	Idle,
+	
 	RestartCall,
-	RestartExecute,
+	RestartEffect,
 	PowerCall,
-	PowerExecute,
-	CoupleCall,
-	CoupleExecute,
-	MoveAbsCall,
-	MoveAbsExecute,
-	DecoupleCall,
-	DecoupleExecute,
+	PowerEffect,
+	
+	HomingCallStep,   
+	HomingEffectStep,
+	HomingCallServo,   
+	HomingEffectServo,
+	Execute,
+	
+	CoupleCallStepMaster,
+	CoupleEffectStepMaster,
+	MoveAbsCallStepMaster,
+	MoveAbsEffectStepMaster,
+	DecoupleCallStepMaster,
+	DecoupleEffectStepMaster,
+	
+	
+	CoupleCallServoMaster,
+	CoupleEffectServoMaster,
+	MoveAbsCallServoMaster,
+	MoveAbsEffectServoMaster,
+	DecoupleCallServoMaster,
+	DecoupleEffectServoMaster,
+	
+	
 	Error
 );
 END_TYPE

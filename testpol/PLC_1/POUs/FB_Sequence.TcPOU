@@ -11,7 +11,6 @@ VAR
 	Master		:	AXIS_REF;
 	fbGearIn	:	MC_GearIn;
 	fbMoveAbsolute	:	MC_MoveAbsolute;
-	fbMoveAbsoluteStep	:	MC_MoveAbsolute;
 	fbGearOut	:	MC_GearOut;
 	xGearIn		:	BOOL;
 	xGearOut	:	BOOL;
@@ -25,37 +24,64 @@ VAR
 	xPowerOn	:			BOOL; //Enabling power sources
 	xExecute	:			BOOL; // Executing program
 	eStateMc 	: 			E_MC ;//instance of enum
+	eStatePrevious	:		E_MC;
 	xStepIsMaster		:		BOOL;
 	xStepIsSlave	:		BOOL;
 	lrPosition	: 			LREAL; //Target Position
 	lrVelocity 	:			LREAL; // Setting Velocity
 	lrRealPosition:			LREAL;
+	xButton_NO1 	AT%I* : BOOL;
 	xButton_NO2 	AT%I* : BOOL;
-	fTrigger			:	F_TRIG;
+	xButton_NO3		AT%I* : BOOL;
+	fTriggerStart			:	F_TRIG;
+	fTriggerReset			:	F_TRIG;
+	fTriggerHome			:	F_TRIG;
 	xStartSequence		:	BOOL;
-	iNumberOfCycles		:	INT;
 	xResetErrors		:	BOOL;
+	xHomeMotors				:	BOOL;
+	tonTooLongInCase	:	TON;
+	xTooLongInCase		:	BOOL;
+	xERROR				:	BOOL;
 END_VAR
 
 ]]></Declaration>
     <Implementation>
-      <ST><![CDATA[fTrigger(CLK:=xButton_NO2 , Q=>xStartSequence );
+      <ST><![CDATA[fTriggerStart(CLK:=xButton_NO2 , Q=>xStartSequence );
+fTriggerReset(CLK:=xButton_NO1 , Q=>xResetErrors );
+fTriggerHome(CLK:=xButton_NO3 , Q=>xHomeMotors );
 lrRealPosition:=ServoAxis.NcToPlc.ActPos;
+
+IF (eStateMc <> E_MC.Idle) AND (eStateMc <> E_MC.Error)  THEN
+	IF eStateMc <> eStatePrevious THEN			// Comparing  current and previous values of enum
+		tonTooLongInCase(IN := FALSE); 			// Reseting clock
+		eStatePrevious := eStateMc; 	
+	END_IF
+
+	tonTooLongInCase(IN := TRUE, PT :=T#30S);
+	
+	IF tonTooLongInCase.Q THEN
+		eStateMc := E_MC.Error; 
+	END_IF
+END_IF
+
 CASE eStateMc OF
+	
 	E_MC.Idle:									// Start of the program
-		IF xStartSequence THEN
-			xStartSequence:=FALSE;
-			iNumberOfCycles:=2;
+		xGearOut:=FALSE;
+		IF xHomeMotors THEN
+			xHomeMotors:=FALSE;
 			eStateMc:=E_MC.RestartCall;
 		END_IF
+		
 	E_MC.RestartCall:							// Calling reset of the errors
 		xManualReset:=TRUE;							
 		IF fbResetServo.Busy AND fbResetStep.Busy THEN
-				eStateMc:=E_MC.RestartExecute;					
+				eStateMc:=E_MC.RestartEffect;					
 		ELSIF	fbResetServo.Error OR fbResetStep.Error THEN
 			eStateMc:=E_MC.Error;
 		END_IF
-	E_MC.RestartExecute:						// Executing reset 
+		
+	E_MC.RestartEffect:						// Executing reset 
 		xManualReset:=FALSE;
 		IF fbResetServo.Done AND fbResetStep.Done THEN
 			eStateMc:=E_MC.PowerCall;
@@ -66,107 +92,214 @@ CASE eStateMc OF
 	E_MC.PowerCall:								// Calling power enable
 		xPowerOn:=TRUE;
 		IF fbPowerServo.Busy AND fbPowerStep.Busy THEN
-				eStateMc:=E_MC.PowerExecute;
+				eStateMc:=E_MC.PowerEffect;
 		ELSIF	fbPowerServo.Error OR fbPowerStep.Error THEN
 			eStateMc:=E_MC.Error;
 		END_IF
-	E_MC.PowerExecute:
+		
+	E_MC.PowerEffect:
 		IF fbPowerServo.Status AND fbPowerStep.Status THEN
-			eStateMc:=E_MC.CoupleCall;
+			eStateMc:=E_MC.HomingCallServo;
 		ELSIF	fbPowerServo.Error OR fbPowerStep.Error THEN
 			eStateMc:=E_MC.Error;
 		END_IF
 	
-	E_MC.CoupleCall:
-		IF iNumberOfCycles=1 THEN
-			Master := StepAxis;
-			Slave  := ServoAxis;
-			xGearIn:=TRUE;
-			IF fbGearIn.Busy THEN
-				eStateMc:=E_MC.CoupleExecute;
-			END_IF
-		ELSIF iNumberOfCycles=2 THEN	
-			Master := ServoAxis;
-			Slave  := StepAxis;
-			xGearIn:=TRUE;
+	E_MC.HomingCallServo:
+		Master:=ServoAxis;
+		lrPosition:=0;
+		lrVelocity:=100;
+		xExecute:=TRUE;
+		IF fbMoveAbsolute.Busy THEN
+			eStateMc := E_MC.HomingEffectServo;
 		END_IF
-			IF fbGearIn.Busy THEN
-				eStateMc:=E_MC.CoupleExecute;
-			END_IF			
+		IF fbMoveAbsolute.Error THEN
+			eStateMc:=E_MC.Error;
+		END_IF
+		
+	E_MC.HomingEffectServo:
+		Master:=ServoAxis;
+		xExecute:=FALSE;
+		IF fbMoveAbsolute.Done THEN
+			eStateMc:=E_MC.HomingCallStep;
+		END_IF
+
+		IF fbMoveAbsolute.Error THEN
+			eStateMc:=E_MC.Error;
+		END_IF	
+
+	E_MC.HomingCallStep:
+		Master:=StepAxis;
+		lrPosition:=0;
+		lrVelocity:=100;
+		xExecute:=TRUE;
+		IF fbMoveAbsolute.Busy THEN
+			eStateMc := E_MC.HomingEffectStep;
+		END_IF
+		IF fbMoveAbsolute.Error THEN
+			eStateMc:=E_MC.Error;
+		END_IF
+		
+	E_MC.HomingEffectStep:
+		Master:=StepAxis;
+		xExecute:=FALSE;
+		IF fbMoveAbsolute.Done THEN
+			eStateMc:=E_MC.CoupleCallStepMaster;
+		END_IF
+
+		IF fbMoveAbsolute.Error THEN
+			eStateMc:=E_MC.Error;
+		END_IF		
+		
+	E_MC.CoupleCallStepMaster:
+		IF ServoAxis.Status.Coupled THEN
+		eStateMc:=E_MC.MoveAbsCallStepMaster;
+		END_IF
+		Master := StepAxis;
+		Slave  := ServoAxis;
+		xGearIn:=TRUE;
+		IF fbGearIn.Busy THEN
+			eStateMc:=E_MC.CoupleEffectStepMaster;
+		END_IF								
 		IF fbGearIn.Error THEN
 			eStateMc:=E_MC.Error;
 		END_IF
-	E_MC.CoupleExecute:
-		IF fbGearIn.InGear AND
-			ServoAxis.Status.Coupled AND
-			StepAxis.Status.Coupled THEN
-			;//eStateMc:=E_MC.MoveAbsCall;
+		
+	E_MC.CoupleEffectStepMaster:
+		IF fbGearIn.InGear  THEN
+			eStateMc:=E_MC.MoveAbsCallStepMaster;
 		ELSIF fbGearIn.Error THEN
 			eStateMc:=E_MC.Error;
-		END_IF		
-	E_MC.MoveAbsCall:
-		IF iNumberOfCycles=1 THEN
-			lrPosition:=0;
-			lrVelocity:=100;
-			xExecute:=TRUE;
-			IF fbMoveAbsolute.Busy THEN
-					eStateMc := E_MC.MoveAbsExecute;
-			END_IF
-		ELSIF iNumberOfCycles=2 THEN
-			lrPosition:=720;
-			lrVelocity:=100;
-			xExecute:=TRUE;
-			IF fbMoveAbsolute.Busy THEN
-					eStateMc := E_MC.MoveAbsExecute;
-			END_IF
+		END_IF	
+	
+	E_MC.MoveAbsCallStepMaster:
+		Master:=StepAxis;
+		lrPosition:=720;
+		lrVelocity:=100;
+		xExecute:=TRUE;
+		IF fbMoveAbsolute.Busy THEN
+			eStateMc := E_MC.MoveAbsEffectStepMaster;
 		END_IF
 		IF fbMoveAbsolute.Error THEN
 			eStateMc:=E_MC.Error;
 		END_IF
-	E_MC.MoveAbsExecute:
+		
+	E_MC.MoveAbsEffectStepMaster:
+		Master:=StepAxis;
 		xExecute:=FALSE;
 		IF fbMoveAbsolute.Done THEN
-			;
+			eStateMc:=E_MC.DecoupleCallStepMaster;
 		END_IF
-//		IF iNumberOfCycles=2 THEN
-//		IF StepAxis.NcToPlc.AxisState=0 THEN
-//			eStateMc:=E_MC.DecoupleCall;
-//		END_IF
-//		END_IF
+
 		IF fbMoveAbsolute.Error THEN
 			eStateMc:=E_MC.Error;
-		END_IF		
-	E_MC.DecoupleCall:
+		END_IF	
+	
+	E_MC.DecoupleCallStepMaster:
+		xGearIn:=FALSE;
 		xGearOut:=TRUE;
+		Slave:=ServoAxis;
 		IF fbGearOut.Busy THEN
-			eStateMc:=E_MC.DecoupleExecute;		
+			eStateMc:=E_MC.DecoupleEffectStepMaster;		
 		ELSIF fbGearOut.Error THEN
 			eStateMc:=E_MC.Error;
 		END_IF	
-	E_MC.DecoupleExecute:
+		
+	E_MC.DecoupleEffectStepMaster:
 		xGearOut:=FALSE;
-		IF fbGearOut.Done AND iNumberOfCycles=1 THEN
-			eStateMc:=E_MC.CoupleCall;
-		ELSIF fbGearOut.Done AND iNumberOfCycles=2 THEN
-			eStateMc:=E_MC.Idle;
-		END_IF
-		IF fbGearOut.Error THEN
+		Slave:=ServoAxis;
+		IF fbGearOut.Done  THEN
+			eStateMc:=E_MC.CoupleCallServoMaster;
+		ELSIF fbGearOut.Error THEN
 			eStateMc:=E_MC.Error;
 		END_IF	
+		
+	E_MC.CoupleCallServoMaster:
+		IF StepAxis.Status.Coupled THEN
+		eStateMc:=E_MC.MoveAbsCallServoMaster;
+		END_IF
+		
+		Master := ServoAxis;
+		Slave  := StepAxis;
+		xGearIn:=TRUE;
+		IF fbGearIn.Busy THEN
+			eStateMc:=E_MC.CoupleEffectServoMaster;
+		END_IF								
+		IF fbGearIn.Error THEN
+			eStateMc:=E_MC.Error;
+		END_IF	
+
+	E_MC.CoupleEffectServoMaster:
+		IF fbGearIn.InGear  THEN
+			eStateMc:=E_MC.MoveAbsCallServoMaster;
+		ELSIF fbGearIn.Error THEN
+			eStateMc:=E_MC.Error;
+		END_IF	
+
+	E_MC.MoveAbsCallServoMaster:
+		Master := ServoAxis;
+		lrPosition:=0;
+		lrVelocity:=100;
+		xExecute:=TRUE;
+		IF fbMoveAbsolute.Busy THEN
+			eStateMc := E_MC.MoveAbsEffectServoMaster;
+		END_IF
+		IF fbMoveAbsolute.Error THEN
+			eStateMc:=E_MC.Error;
+		END_IF
+	
+	E_MC.MoveAbsEffectServoMaster:
+		Master:=ServoAxis;
+		xExecute:=FALSE;
+		IF fbMoveAbsolute.Done THEN
+			eStateMc:=E_MC.DecoupleCallServoMaster;
+		END_IF
+		
+		IF fbMoveAbsolute.Error THEN
+			eStateMc:=E_MC.Error;
+		END_IF					
+	
+	E_MC.DecoupleCallServoMaster:
+		xGearIn:=FALSE;
+		xGearOut:=TRUE;
+		Slave:=StepAxis;
+		IF fbGearOut.Busy THEN
+			eStateMc:=E_MC.DecoupleEffectServoMaster;		
+		ELSIF fbGearOut.Error THEN
+			eStateMc:=E_MC.Error;
+		END_IF	
+		
+	E_MC.DecoupleEffectServoMaster:
+		xGearOut:=FALSE;
+		Slave:=StepAxis;
+		IF fbGearOut.Done  THEN
+			eStateMc:=E_MC.Idle;
+		ELSIF fbGearOut.Error THEN
+			eStateMc:=E_MC.Error;
+		END_IF		
+		
 	E_MC.Error:
 		xPowerOn:=FALSE;
 		IF xResetErrors THEN
-			eStateMc:=E_MC.Idle;
+			xResetErrors:=FALSE;
+			IF StepAxis.Status.Coupled OR ServoAxis.Status.Coupled THEN
+				xGearIn:=FALSE;
+				xGearOut:=TRUE;
+				xERROR:=FALSE;
+				eStateMc := E_MC.Idle;
+			ELSE
+				xERROR:=FALSE;
+				eStateMc := E_MC.Idle;
+			END_IF	
 		END_IF
 END_CASE
-//przepisać krok po kroku program timery jak za długo w casie w jednym kroku napisać 
+
 //SERVO MOTOR
 fbResetServo(				//Reseting motor // Reset1 -> ResetServoMotor
 	Axis:= ServoAxis, 
 	Execute:= xManualReset, 
 	Done=> , 
 	Busy=> , 
-	Error=> , 
+	Error=> xERROR, 
 	ErrorID=> );
 	
 fbPowerServo(				// Turning power on
@@ -179,7 +312,7 @@ fbPowerServo(				// Turning power on
 	Options:= , 
 	Status=> , 
 	Busy=> , 
-	Error=> , 
+	Error=>xERROR , 
 	ErrorID=> );
 	
 	
@@ -189,7 +322,7 @@ fbResetStep(				//Reseting motor
 	Execute:= xManualReset, 
 	Done=> , 
 	Busy=> , 
-	Error=> , 
+	Error=>xERROR , 
 	ErrorID=> );
 	
 fbPowerStep(				// Turning power on
@@ -202,7 +335,7 @@ fbPowerStep(				// Turning power on
 	Options:= , 
 	Status=> , 
 	Busy=> , 
-	Error=> , 
+	Error=>xERROR , 
 	ErrorID=> );
 	
 	
@@ -211,7 +344,7 @@ fbMoveAbsolute(			// Executing program
 	Execute:= xExecute, 
 	Position:=lrPosition, 
 	Velocity:= lrVelocity, 
-	Acceleration:= 0, 
+	Acceleration:= , 
 	Deceleration:= , 
 	Jerk:= , 
 	BufferMode:= , 
@@ -220,7 +353,7 @@ fbMoveAbsolute(			// Executing program
 	Busy=> , 
 	Active=> , 
 	CommandAborted=> , 
-	Error=> , 
+	Error=>xERROR , 
 	ErrorID=> );
 fbGearIn(
 		Master:=Master , 
@@ -237,7 +370,7 @@ fbGearIn(
 		Busy=> , 
 		Active=> , 
 		CommandAborted=> , 
-		Error=> , 
+		Error=>xERROR , 
 		ErrorID=> );
 	
 fbGearOut(
@@ -246,17 +379,110 @@ fbGearOut(
 		Options:= , 
 		Done=> , 
 		Busy=> , 
-		Error=> , 
+		Error=>xERROR , 
 		ErrorID=> );
 ]]></ST>
     </Implementation>
     <LineIds Name="FB_Sequence">
-      <LineId Id="1577" Count="58" />
-      <LineId Id="1810" Count="1" />
-      <LineId Id="1636" Count="24" />
+      <LineId Id="1577" Count="0" />
+      <LineId Id="2055" Count="0" />
+      <LineId Id="2140" Count="0" />
+      <LineId Id="1578" Count="0" />
+      <LineId Id="2053" Count="0" />
+      <LineId Id="2051" Count="0" />
+      <LineId Id="2040" Count="3" />
+      <LineId Id="2045" Count="2" />
+      <LineId Id="2049" Count="1" />
+      <LineId Id="2035" Count="0" />
+      <LineId Id="2052" Count="0" />
+      <LineId Id="2054" Count="0" />
+      <LineId Id="1579" Count="0" />
+      <LineId Id="1899" Count="0" />
+      <LineId Id="1580" Count="1" />
+      <LineId Id="2135" Count="0" />
+      <LineId Id="1582" Count="0" />
+      <LineId Id="1584" Count="1" />
+      <LineId Id="1898" Count="0" />
+      <LineId Id="1586" Count="6" />
+      <LineId Id="1897" Count="0" />
+      <LineId Id="1593" Count="14" />
+      <LineId Id="1896" Count="0" />
+      <LineId Id="1608" Count="6" />
+      <LineId Id="2141" Count="0" />
+      <LineId Id="2164" Count="19" />
+      <LineId Id="2143" Count="0" />
+      <LineId Id="2185" Count="21" />
+      <LineId Id="2184" Count="0" />
+      <LineId Id="2207" Count="0" />
+      <LineId Id="1615" Count="0" />
+      <LineId Id="1906" Count="2" />
+      <LineId Id="1617" Count="5" />
+      <LineId Id="1631" Count="2" />
+      <LineId Id="1895" Count="0" />
+      <LineId Id="1634" Count="5" />
+      <LineId Id="1894" Count="0" />
+      <LineId Id="1640" Count="0" />
+      <LineId Id="1986" Count="0" />
+      <LineId Id="1642" Count="4" />
+      <LineId Id="1655" Count="3" />
+      <LineId Id="1893" Count="0" />
+      <LineId Id="1659" Count="0" />
+      <LineId Id="1985" Count="0" />
+      <LineId Id="2016" Count="0" />
       <LineId Id="1806" Count="2" />
-      <LineId Id="1661" Count="4" />
-      <LineId Id="1671" Count="114" />
+      <LineId Id="1946" Count="0" />
+      <LineId Id="1671" Count="2" />
+      <LineId Id="1891" Count="0" />
+      <LineId Id="1674" Count="0" />
+      <LineId Id="1922" Count="0" />
+      <LineId Id="1675" Count="0" />
+      <LineId Id="2025" Count="0" />
+      <LineId Id="1676" Count="4" />
+      <LineId Id="1892" Count="0" />
+      <LineId Id="1681" Count="0" />
+      <LineId Id="2029" Count="0" />
+      <LineId Id="2026" Count="0" />
+      <LineId Id="1683" Count="1" />
+      <LineId Id="1688" Count="2" />
+      <LineId Id="1902" Count="0" />
+      <LineId Id="1890" Count="0" />
+      <LineId Id="1910" Count="11" />
+      <LineId Id="1900" Count="0" />
+      <LineId Id="1923" Count="5" />
+      <LineId Id="1901" Count="0" />
+      <LineId Id="1931" Count="11" />
+      <LineId Id="1929" Count="0" />
+      <LineId Id="1987" Count="0" />
+      <LineId Id="1989" Count="0" />
+      <LineId Id="2017" Count="0" />
+      <LineId Id="1990" Count="2" />
+      <LineId Id="1996" Count="2" />
+      <LineId Id="1988" Count="0" />
+      <LineId Id="1930" Count="0" />
+      <LineId Id="1999" Count="0" />
+      <LineId Id="2001" Count="1" />
+      <LineId Id="2027" Count="0" />
+      <LineId Id="2003" Count="7" />
+      <LineId Id="2028" Count="0" />
+      <LineId Id="2011" Count="3" />
+      <LineId Id="2000" Count="0" />
+      <LineId Id="2015" Count="0" />
+      <LineId Id="1691" Count="0" />
+      <LineId Id="2087" Count="0" />
+      <LineId Id="2121" Count="0" />
+      <LineId Id="2137" Count="0" />
+      <LineId Id="2130" Count="0" />
+      <LineId Id="2127" Count="0" />
+      <LineId Id="2129" Count="0" />
+      <LineId Id="2084" Count="0" />
+      <LineId Id="2128" Count="0" />
+      <LineId Id="2131" Count="0" />
+      <LineId Id="2133" Count="0" />
+      <LineId Id="2132" Count="0" />
+      <LineId Id="2136" Count="0" />
+      <LineId Id="1695" Count="1" />
+      <LineId Id="2033" Count="0" />
+      <LineId Id="1698" Count="87" />
       <LineId Id="45" Count="0" />
     </LineIds>
   </POU>

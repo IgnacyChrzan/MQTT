@@ -1496,7 +1496,7 @@ External Setpoint Generation:
 			</ArrayInfo>
 		</DataType>
 		<DataType>
-			<Name GUID="{18071995-0000-0000-0000-00200000000D}" IecBaseType="true" AutoDeleteType="true" HideSubItems="true">ARRAY [0..12] OF BIT</Name>
+			<Name GUID="{18071995-0000-0000-0000-00200000000D}" IecBaseType="true" BitType="true" AutoDeleteType="true" HideSubItems="true">ARRAY [0..12] OF BIT</Name>
 			<BitSize>13</BitSize>
 			<BaseType GUID="{18071995-0000-0000-0000-000000000010}">BIT</BaseType>
 			<ArrayInfo>
@@ -2026,7 +2026,7 @@ External Setpoint Generation:
 		</Motion>
 		<Plc>
 			<Project GUID="{ADE71022-9B25-4401-9282-130880C43DA0}" Name="PLC_1" PrjFilePath="PLC_1\PLC_1.plcproj" TmcFilePath="PLC_1\PLC_1.tmc" ReloadTmc="true" AmsPort="851" FileArchiveSettings="#x000e" SymbolicMapping="true">
-				<Instance Id="#x08502000" TcSmClass="TComPlcObjDef" KeepUnrestoredLinks="2" TmcPath="PLC_1\PLC_1.tmc" TmcHash="{68058025-5EAF-C52F-7C1B-D4F778BC4906}">
+				<Instance Id="#x08502000" TcSmClass="TComPlcObjDef" KeepUnrestoredLinks="2" TmcPath="PLC_1\PLC_1.tmc" TmcHash="{573BCD3A-95E0-9427-6F92-E3F522598481}">
 					<Name>PLC_1 Instance</Name>
 					<CLSID ClassFactory="TcPlc30">{08500001-0000-0000-F000-000000000064}</CLSID>
 					<Vars VarGrpType="1">
@@ -2052,7 +2052,15 @@ External Setpoint Generation:
 							<Type GUID="{25521FAA-EA5F-4C7F-8864-BBCCDACD2E98}" Namespace="MC">NCTOPLC_AXIS_REF</Type>
 						</Var>
 						<Var>
+							<Name>MAIN.fbSequence.xButton_NO1</Name>
+							<Type>BOOL</Type>
+						</Var>
+						<Var>
 							<Name>MAIN.fbSequence.xButton_NO2</Name>
+							<Type>BOOL</Type>
+						</Var>
+						<Var>
+							<Name>MAIN.fbSequence.xButton_NO3</Name>
 							<Type>BOOL</Type>
 						</Var>
 					</Vars>
@@ -2092,6 +2100,13 @@ External Setpoint Generation:
 							<OwnerB Name="TIID^Device 3 (EtherCAT)^Term 1 (EK1100)^Term 3 (EL1008)">
 								<Link VarA="MAIN.fbCoupling.xButton_NO1" TypeA="BOOL" InOutA="0" GuidA="{18071995-0000-0000-0000-000000000030}" VarB="Channel 2^Input" Size="1" RestoreInfo="ANotFound"/>
 								<Link VarA="MAIN.fbCoupling.xButton_NO2" TypeA="BOOL" InOutA="0" GuidA="{18071995-0000-0000-0000-000000000030}" VarB="Channel 7^Input" Size="1" RestoreInfo="ANotFound"/>
+							</OwnerB>
+						</OwnerA>
+					</UnrestoredVarLinks>
+					<UnrestoredVarLinks ImportTime="2025-02-23T18:08:11">
+						<OwnerA Name="InputDst" Prefix="TIPC^PLC_1^PLC_1 Instance" Type="1">
+							<OwnerB Name="TIID^Device 3 (EtherCAT)^Term 1 (EK1100)^Term 3 (EL1008)">
+								<Link VarA="MAIN.fbSequence.xResetErrors" TypeA="BOOL" InOutA="0" GuidA="{18071995-0000-0000-0000-000000000030}" VarB="Channel 2^Input" Size="1" RestoreInfo="ANotFound"/>
 							</OwnerB>
 						</OwnerA>
 					</UnrestoredVarLinks>
@@ -5159,7 +5174,11 @@ Bit 8 - 15 : reserved]]></Comment>
 			<OwnerB Name="TIID^Device 2 (RT-Ethernet Protocol)">
 				<Link VarA="PlcTask Inputs^GVL_PLC.uiDevState" VarB="Inputs^DevState"/>
 			</OwnerB>
+			<OwnerB Name="TIID^Device 3 (EtherCAT)^Term 1 (EK1100)^Term 2 (EL1008)">
+				<Link VarA="PlcTask Inputs^MAIN.fbSequence.xButton_NO3" VarB="Channel 1^Input"/>
+			</OwnerB>
 			<OwnerB Name="TIID^Device 3 (EtherCAT)^Term 1 (EK1100)^Term 3 (EL1008)">
+				<Link VarA="PlcTask Inputs^MAIN.fbSequence.xButton_NO1" VarB="Channel 2^Input"/>
 				<Link VarA="PlcTask Inputs^MAIN.fbSequence.xButton_NO2" VarB="Channel 7^Input"/>
 			</OwnerB>
 			<OwnerB Name="TINC^NC-Task 1 SAF^Axes^ServoAxis">
