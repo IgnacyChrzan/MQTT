@@ -33,6 +33,10 @@ TYPE E_MC :
 	DecoupleCallServoMaster,
 	DecoupleEffectServoMaster,
 	
+	DecoupleCallOnReset,
+	DecoupleEffectOnReset,	
+	RestartCallOnReset,
+	RestartEffectOnReset,	
 	
 	Error
 );

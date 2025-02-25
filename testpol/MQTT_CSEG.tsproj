@@ -2026,7 +2026,7 @@ External Setpoint Generation:
 		</Motion>
 		<Plc>
 			<Project GUID="{ADE71022-9B25-4401-9282-130880C43DA0}" Name="PLC_1" PrjFilePath="PLC_1\PLC_1.plcproj" TmcFilePath="PLC_1\PLC_1.tmc" ReloadTmc="true" AmsPort="851" FileArchiveSettings="#x000e" SymbolicMapping="true">
-				<Instance Id="#x08502000" TcSmClass="TComPlcObjDef" KeepUnrestoredLinks="2" TmcPath="PLC_1\PLC_1.tmc" TmcHash="{573BCD3A-95E0-9427-6F92-E3F522598481}">
+				<Instance Id="#x08502000" TcSmClass="TComPlcObjDef" KeepUnrestoredLinks="2" TmcPath="PLC_1\PLC_1.tmc" TmcHash="{CF4F2299-3E98-ED22-2B0D-5D57ACF820D2}">
 					<Name>PLC_1 Instance</Name>
 					<CLSID ClassFactory="TcPlc30">{08500001-0000-0000-F000-000000000064}</CLSID>
 					<Vars VarGrpType="1">
@@ -5069,7 +5069,7 @@ Bit 8 - 15 : reserved]]></Comment>
 						<DeviceData>00010554a2b1</DeviceData>
 					</Pnp>
 				</AddressInfo>
-				<Image Id="3" AddrType="1" ImageType="3">
+				<Image Id="3" AddrType="2" ImageType="3">
 					<Name>Image</Name>
 				</Image>
 				<Ethernet DeviceDesc="LAN2 (TwinCAT-Intel PCI Ethernet Adapter (Gigabit))"/>

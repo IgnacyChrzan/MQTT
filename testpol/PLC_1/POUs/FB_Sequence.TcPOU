@@ -3,22 +3,22 @@
   <POU Name="FB_Sequence" Id="{78c0308a-89d8-46d6-9315-ac5ef803a704}" SpecialFunc="None">
     <Declaration><![CDATA[FUNCTION_BLOCK FB_Sequence
 VAR_IN_OUT
-	ServoAxis	:	AXIS_REF;
+	ServoAxis	:	AXIS_REF;			// Axises of two motors
 	StepAxis	:	AXIS_REF;
 END_VAR
 VAR
-	Slave		:	AXIS_REF;
+	Slave		:	AXIS_REF;			// Slave and master axises
 	Master		:	AXIS_REF;
-	fbGearIn	:	MC_GearIn;
+	fbGearIn	:	MC_GearIn;			// Motion control function blocks
 	fbMoveAbsolute	:	MC_MoveAbsolute;
 	fbGearOut	:	MC_GearOut;
-	xGearIn		:	BOOL;
-	xGearOut	:	BOOL;
-    lrRatioNumerator   : LREAL:=1;
-    uiRatioDenominator : UINT:=1;
 	fbResetServo 	: 			MC_Reset;
 	fbResetStep 	: 			MC_Reset;
 	fbPowerServo 	: 			MC_Power;
+	xGearIn		:	BOOL;				// Coupling motors
+	xGearOut	:	BOOL;				// Decoupling motors
+    lrRatioNumerator   : LREAL:=1;
+    uiRatioDenominator : UINT:=1;
 	fbPowerStep	: 			MC_Power;
 	xManualReset	 : 		BOOL; // Resetting program
 	xPowerOn	:			BOOL; //Enabling power sources
@@ -27,47 +27,47 @@ VAR
 	eStatePrevious	:		E_MC;
 	xStepIsMaster		:		BOOL;
 	xStepIsSlave	:		BOOL;
-	lrPosition	: 			LREAL; //Target Position
-	lrVelocity 	:			LREAL; // Setting Velocity
-	lrRealPosition:			LREAL;
+	lrPosition	: 			LREAL; 	//Target Position
+	lrVelocity 	:			LREAL; 	// Setting Velocity
+	lrRealPosition:			LREAL;	// real position
 	xButton_NO1 	AT%I* : BOOL;
 	xButton_NO2 	AT%I* : BOOL;
 	xButton_NO3		AT%I* : BOOL;
 	fTriggerStart			:	F_TRIG;
-	fTriggerReset			:	F_TRIG;
+	fTriggerReset			:	F_TRIG;		// Falling triggers on 3 buttons
 	fTriggerHome			:	F_TRIG;
-	xStartSequence		:	BOOL;
-	xResetErrors		:	BOOL;
-	xHomeMotors				:	BOOL;
-	tonTooLongInCase	:	TON;
-	xTooLongInCase		:	BOOL;
-	xERROR				:	BOOL;
+	xStartSequence		:	BOOL;			// starting sequence
+	xResetErrors		:	BOOL;			// Reseting errors
+	xHomeMotors				:	BOOL;		// Homing motors
+	tonTooLongInCase	:	TON;			// Ton timer counting time in each case
+	xTooLongInCase		:	BOOL;		   // Too long in case
+	sErrorLocalization	:	STRING(255);  // Moment when error occured
 END_VAR
 
 ]]></Declaration>
     <Implementation>
-      <ST><![CDATA[fTriggerStart(CLK:=xButton_NO2 , Q=>xStartSequence );
+      <ST><![CDATA[fTriggerStart(CLK:=xButton_NO2 , Q=>xStartSequence );		// Triggers on buttons
 fTriggerReset(CLK:=xButton_NO1 , Q=>xResetErrors );
 fTriggerHome(CLK:=xButton_NO3 , Q=>xHomeMotors );
 lrRealPosition:=ServoAxis.NcToPlc.ActPos;
-
+// Timer in each case
 IF (eStateMc <> E_MC.Idle) AND (eStateMc <> E_MC.Error)  THEN
 	IF eStateMc <> eStatePrevious THEN			// Comparing  current and previous values of enum
 		tonTooLongInCase(IN := FALSE); 			// Reseting clock
-		eStatePrevious := eStateMc; 	
+		eStatePrevious := eStateMc; 			// timeout string
 	END_IF
 
-	tonTooLongInCase(IN := TRUE, PT :=T#30S);
+	tonTooLongInCase(IN := TRUE, PT :=T#20S);
 	
 	IF tonTooLongInCase.Q THEN
 		eStateMc := E_MC.Error; 
+		sErrorLocalization:='Timeout';
 	END_IF
 END_IF
-
+// Case of program states
 CASE eStateMc OF
 	
-	E_MC.Idle:									// Start of the program
-		xGearOut:=FALSE;
+	E_MC.Idle:									// Start of the program, homing
 		IF xHomeMotors THEN
 			xHomeMotors:=FALSE;
 			eStateMc:=E_MC.RestartCall;
@@ -79,6 +79,7 @@ CASE eStateMc OF
 				eStateMc:=E_MC.RestartEffect;					
 		ELSIF	fbResetServo.Error OR fbResetStep.Error THEN
 			eStateMc:=E_MC.Error;
+			sErrorLocalization:='Error when reseting motor errors(RestartCall)';
 		END_IF
 		
 	E_MC.RestartEffect:						// Executing reset 
@@ -87,6 +88,7 @@ CASE eStateMc OF
 			eStateMc:=E_MC.PowerCall;
 		ELSIF	fbResetServo.Error OR fbResetStep.Error THEN
 			eStateMc:=E_MC.Error;
+			sErrorLocalization:='Error when reseting motor errors(RestartEffect)';
 		END_IF
 		
 	E_MC.PowerCall:								// Calling power enable
@@ -95,6 +97,7 @@ CASE eStateMc OF
 				eStateMc:=E_MC.PowerEffect;
 		ELSIF	fbPowerServo.Error OR fbPowerStep.Error THEN
 			eStateMc:=E_MC.Error;
+			sErrorLocalization:='Error when enabling motors power(PowerCall)';
 		END_IF
 		
 	E_MC.PowerEffect:
@@ -102,9 +105,10 @@ CASE eStateMc OF
 			eStateMc:=E_MC.HomingCallServo;
 		ELSIF	fbPowerServo.Error OR fbPowerStep.Error THEN
 			eStateMc:=E_MC.Error;
+			sErrorLocalization:='Error when enabling motors power(PowerEffect)';
 		END_IF
 	
-	E_MC.HomingCallServo:
+	E_MC.HomingCallServo:			// Homing servo motor
 		Master:=ServoAxis;
 		lrPosition:=0;
 		lrVelocity:=100;
@@ -113,7 +117,13 @@ CASE eStateMc OF
 			eStateMc := E_MC.HomingEffectServo;
 		END_IF
 		IF fbMoveAbsolute.Error THEN
+			// Going into error step, when error id is 1800 write information about it
 			eStateMc:=E_MC.Error;
+			IF ServoAxis.Status.ErrorID=16#00004650 THEN
+				sErrorLocalization:=CONCAT(CONCAT('Error homing servo motor(HomingCallStep) ErrorID: ',UDINT_TO_STRING(ServoAxis.Status.ErrorID)),' Drive hardware not ready to operate');
+			ELSE
+				sErrorLocalization:='Error homing servo motor(HomingCallStep)';
+			END_IF
 		END_IF
 		
 	E_MC.HomingEffectServo:
@@ -125,9 +135,14 @@ CASE eStateMc OF
 
 		IF fbMoveAbsolute.Error THEN
 			eStateMc:=E_MC.Error;
+			IF ServoAxis.Status.ErrorID=16#00004650 THEN
+				sErrorLocalization:=CONCAT(CONCAT('Error homing servo motor(HomingEffectServo) ErrorID: ',UDINT_TO_STRING(ServoAxis.Status.ErrorID)),' Drive hardware not ready to operate');
+			ELSE
+				sErrorLocalization:='Error homing servo motor(HomingEffectServo)';
+			END_IF
 		END_IF	
 
-	E_MC.HomingCallStep:
+	E_MC.HomingCallStep:			// Homing Step motor
 		Master:=StepAxis;
 		lrPosition:=0;
 		lrVelocity:=100;
@@ -137,6 +152,11 @@ CASE eStateMc OF
 		END_IF
 		IF fbMoveAbsolute.Error THEN
 			eStateMc:=E_MC.Error;
+			IF StepAxis.Status.ErrorID=16#00004650 THEN
+				sErrorLocalization:=CONCAT(CONCAT('Error homing servo motor(HomingCallStep) ErrorID: ',UDINT_TO_STRING(StepAxis.Status.ErrorID)),' Drive hardware not ready to operate');
+			ELSE
+				sErrorLocalization:='Error homing step motor(HomingCallStep)';
+			END_IF			
 		END_IF
 		
 	E_MC.HomingEffectStep:
@@ -148,15 +168,20 @@ CASE eStateMc OF
 
 		IF fbMoveAbsolute.Error THEN
 			eStateMc:=E_MC.Error;
+			IF StepAxis.Status.ErrorID=16#00004650 THEN
+				sErrorLocalization:=CONCAT(CONCAT('Error homing servo motor(HomingEffectStep) ErrorID: ',UDINT_TO_STRING(StepAxis.Status.ErrorID)),' Drive hardware not ready to operate');
+			ELSE
+				sErrorLocalization:='Error homing step motor(HomingEffectStep)';
+			END_IF	
 		END_IF		
-	
+	// Waiting for start button 
 	E_MC.Execute:
 		IF 	xStartSequence THEN
 			xStartSequence:=FALSE;
 			eStateMc:=E_MC.CoupleCallStepMaster;
 		END_IF
 		
-	E_MC.CoupleCallStepMaster:
+	E_MC.CoupleCallStepMaster:					// Coupling Motors
 		IF ServoAxis.Status.Coupled THEN
 		eStateMc:=E_MC.MoveAbsCallStepMaster;
 		END_IF
@@ -168,6 +193,7 @@ CASE eStateMc OF
 		END_IF								
 		IF fbGearIn.Error THEN
 			eStateMc:=E_MC.Error;
+			sErrorLocalization:='Error coupling motors(CoupleCallStepMaster)';
 		END_IF
 		
 	E_MC.CoupleEffectStepMaster:
@@ -175,9 +201,10 @@ CASE eStateMc OF
 			eStateMc:=E_MC.MoveAbsCallStepMaster;
 		ELSIF fbGearIn.Error THEN
 			eStateMc:=E_MC.Error;
+			sErrorLocalization:='Error coupling motors(CoupleEffectStepMaster)';
 		END_IF	
 	
-	E_MC.MoveAbsCallStepMaster:
+	E_MC.MoveAbsCallStepMaster:				// move absolute for first coupling
 		Master:=StepAxis;
 		lrPosition:=720;
 		lrVelocity:=100;
@@ -187,6 +214,13 @@ CASE eStateMc OF
 		END_IF
 		IF fbMoveAbsolute.Error THEN
 			eStateMc:=E_MC.Error;
+			IF StepAxis.Status.ErrorID=16#00004650 THEN
+				sErrorLocalization:=CONCAT(CONCAT('Error in step motor movement(MoveAbsCallStepMaster) ErrorID: ',UDINT_TO_STRING(StepAxis.Status.ErrorID)),' Drive hardware not ready to operate');
+			ELSIF ServoAxis.Status.ErrorID=16#00004650 THEN
+				sErrorLocalization:=CONCAT(CONCAT('Error in servo motor movement(MoveAbsCallStepMaster) ErrorID: ',UDINT_TO_STRING(ServoAxis.Status.ErrorID)),' Drive hardware not ready to operate');
+			ELSE
+				sErrorLocalization:='Error in motors movement(MoveAbsCallStepMaster)';
+			END_IF	
 		END_IF
 		
 	E_MC.MoveAbsEffectStepMaster:
@@ -198,9 +232,16 @@ CASE eStateMc OF
 
 		IF fbMoveAbsolute.Error THEN
 			eStateMc:=E_MC.Error;
+			IF StepAxis.Status.ErrorID=16#00004650 THEN
+				sErrorLocalization:=CONCAT(CONCAT('Error in step motor movement(MoveAbsEffectStepMaster) ErrorID: ',UDINT_TO_STRING(StepAxis.Status.ErrorID)),' Drive hardware not ready to operate');
+			ELSIF ServoAxis.Status.ErrorID=16#00004650 THEN
+				sErrorLocalization:=CONCAT(CONCAT('Error in servo motor movement(MoveAbsEffectStepMaster) ErrorID: ',UDINT_TO_STRING(ServoAxis.Status.ErrorID)),' Drive hardware not ready to operate');
+			ELSE
+				sErrorLocalization:='Error in motors movement(MoveAbsEffectStepMaster)';
+			END_IF	
 		END_IF	
 	
-	E_MC.DecoupleCallStepMaster:
+	E_MC.DecoupleCallStepMaster:				// Decoupling motors
 		xGearIn:=FALSE;
 		xGearOut:=TRUE;
 		Slave:=ServoAxis;
@@ -208,6 +249,7 @@ CASE eStateMc OF
 			eStateMc:=E_MC.DecoupleEffectStepMaster;		
 		ELSIF fbGearOut.Error THEN
 			eStateMc:=E_MC.Error;
+			sErrorLocalization:='Error decoupling motors(DecoupleCallStepMaster)';
 		END_IF	
 		
 	E_MC.DecoupleEffectStepMaster:
@@ -217,9 +259,10 @@ CASE eStateMc OF
 			eStateMc:=E_MC.CoupleCallServoMaster;
 		ELSIF fbGearOut.Error THEN
 			eStateMc:=E_MC.Error;
+			sErrorLocalization:='Error decoupling motors(DecoupleEffectStepMaster)';
 		END_IF	
 		
-	E_MC.CoupleCallServoMaster:
+	E_MC.CoupleCallServoMaster:						// Second couple 
 		IF StepAxis.Status.Coupled THEN
 		eStateMc:=E_MC.MoveAbsCallServoMaster;
 		END_IF
@@ -232,6 +275,7 @@ CASE eStateMc OF
 		END_IF								
 		IF fbGearIn.Error THEN
 			eStateMc:=E_MC.Error;
+			sErrorLocalization:='Error coupling motors(CoupleCallServoMaster)';
 		END_IF	
 
 	E_MC.CoupleEffectServoMaster:
@@ -239,9 +283,10 @@ CASE eStateMc OF
 			eStateMc:=E_MC.MoveAbsCallServoMaster;
 		ELSIF fbGearIn.Error THEN
 			eStateMc:=E_MC.Error;
+			sErrorLocalization:='Error coupling motors(CoupleEffectServoMaster)';
 		END_IF	
 
-	E_MC.MoveAbsCallServoMaster:
+	E_MC.MoveAbsCallServoMaster:				// Move absolute for second couple
 		Master := ServoAxis;
 		lrPosition:=0;
 		lrVelocity:=100;
@@ -249,8 +294,15 @@ CASE eStateMc OF
 		IF fbMoveAbsolute.Busy THEN
 			eStateMc := E_MC.MoveAbsEffectServoMaster;
 		END_IF
-		IF fbMoveAbsolute.Error THEN
+		IF fbMoveAbsolute.Error THEN 
 			eStateMc:=E_MC.Error;
+			IF StepAxis.Status.ErrorID=16#00004650 THEN
+				sErrorLocalization:=CONCAT(CONCAT('Error in step motor movement(MoveAbsCallServoMaster) ErrorID: ',UDINT_TO_STRING(StepAxis.Status.ErrorID)),' Drive hardware not ready to operate');
+			ELSIF ServoAxis.Status.ErrorID=16#00004650 THEN
+				sErrorLocalization:=CONCAT(CONCAT('Error in servo motor movement(MoveAbsCallServoMaster) ErrorID: ',UDINT_TO_STRING(ServoAxis.Status.ErrorID)),' Drive hardware not ready to operate');
+			ELSE
+				sErrorLocalization:='Error in motors movement(MoveAbsCallServoMaster)';
+			END_IF	
 		END_IF
 	
 	E_MC.MoveAbsEffectServoMaster:
@@ -262,9 +314,16 @@ CASE eStateMc OF
 		
 		IF fbMoveAbsolute.Error THEN
 			eStateMc:=E_MC.Error;
+			IF StepAxis.Status.ErrorID=16#00004650 THEN
+				sErrorLocalization:=CONCAT(CONCAT('Error in step motor movement(MoveAbsEffectServoMaster) ErrorID: ',UDINT_TO_STRING(StepAxis.Status.ErrorID)),' Drive hardware not ready to operate');
+			ELSIF ServoAxis.Status.ErrorID=16#00004650 THEN
+				sErrorLocalization:=CONCAT(CONCAT('Error in servo motor movement(MoveAbsEffectServoMaster) ErrorID: ',UDINT_TO_STRING(ServoAxis.Status.ErrorID)),' Drive hardware not ready to operate');
+			ELSE
+				sErrorLocalization:='Error in motors movement(MoveAbsEffectServoMaster)';
+			END_IF	
 		END_IF					
 	
-	E_MC.DecoupleCallServoMaster:
+	E_MC.DecoupleCallServoMaster:				// Decoupling
 		xGearIn:=FALSE;
 		xGearOut:=TRUE;
 		Slave:=StepAxis;
@@ -272,7 +331,9 @@ CASE eStateMc OF
 			eStateMc:=E_MC.DecoupleEffectServoMaster;		
 		ELSIF fbGearOut.Error THEN
 			eStateMc:=E_MC.Error;
+			sErrorLocalization:='Error decoupling motors(DecoupleCallServoMaster)';
 		END_IF	
+		
 		
 	E_MC.DecoupleEffectServoMaster:
 		xGearOut:=FALSE;
@@ -281,23 +342,73 @@ CASE eStateMc OF
 			eStateMc:=E_MC.Idle;
 		ELSIF fbGearOut.Error THEN
 			eStateMc:=E_MC.Error;
+			sErrorLocalization:='Error decoupling motors(DecoupleEffectServoMaster)';
+		END_IF		
+	
+		
+	// Cases for when error occurs 	
+		
+	E_MC.DecoupleCallOnReset:							// Decoupling after reset
+		IF StepAxis.Status.Coupled THEN
+			Slave:=StepAxis;
+		ELSIF ServoAxis.Status.Coupled THEN
+			Slave:=ServoAxis;
+		END_IF
+		xGearIn:=FALSE;
+		xGearOut:=TRUE;
+		IF fbGearOut.Busy THEN
+			eStateMc:=E_MC.DecoupleEffectOnReset;		
+		ELSIF fbGearOut.Error THEN
+			eStateMc:=E_MC.Error;
+			sErrorLocalization:='Error decoupling motors(DecoupleCallOnReset)';
+		END_IF	
+	
+	E_MC.DecoupleEffectOnReset:	
+		IF StepAxis.Status.Coupled THEN
+			Slave:=StepAxis;
+		ELSIF ServoAxis.Status.Coupled THEN
+			Slave:=ServoAxis;
+		END_IF
+		xGearOut:=FALSE;
+		Slave:=StepAxis;
+		IF fbGearOut.Done  THEN
+			eStateMc:=E_MC.RestartCallOnReset;
+		ELSIF fbGearOut.Error THEN
+			eStateMc:=E_MC.Error;
+			sErrorLocalization:='Error decoupling motors(DecoupleEffectOnReset)';
 		END_IF		
 		
-	E_MC.Error:
+	E_MC.RestartCallOnReset:									// Reseting errors after reset 
+		xManualReset:=TRUE;							
+		IF fbResetServo.Busy AND fbResetStep.Busy THEN
+				eStateMc:=E_MC.RestartEffectOnReset;					
+		ELSIF	fbResetServo.Error OR fbResetStep.Error THEN
+			eStateMc:=E_MC.Error;
+			sErrorLocalization:='Error when reseting motor errors(RestartCallOnReset)';
+		END_IF
+		
+	E_MC.RestartEffectOnReset:	
+		xManualReset:=FALSE;
+		IF fbResetServo.Done AND fbResetStep.Done THEN
+			eStateMc:=E_MC.Idle;
+		ELSIF	fbResetServo.Error OR fbResetStep.Error THEN
+			eStateMc:=E_MC.Error;
+			sErrorLocalization:='Error when reseting motor errors(RestartEffectOnReset)';
+		END_IF
+		
+	E_MC.Error:									// Error case, turning power off and going to next case
 		xPowerOn:=FALSE;
 		IF xResetErrors THEN
 			xResetErrors:=FALSE;
+			sErrorLocalization:='';
 			IF StepAxis.Status.Coupled OR ServoAxis.Status.Coupled THEN
-				xGearIn:=FALSE;
-				xGearOut:=TRUE;
-				xERROR:=FALSE;
-				eStateMc := E_MC.Idle;
+				eStateMc := E_MC.DecoupleCallOnReset;
 			ELSE
-				xERROR:=FALSE;
-				eStateMc := E_MC.Idle;
+				eStateMc := E_MC.RestartCallOnReset;
 			END_IF	
 		END_IF
 END_CASE
+
 
 //SERVO MOTOR
 fbResetServo(				//Reseting motor // Reset1 -> ResetServoMotor
@@ -305,7 +416,7 @@ fbResetServo(				//Reseting motor // Reset1 -> ResetServoMotor
 	Execute:= xManualReset, 
 	Done=> , 
 	Busy=> , 
-	Error=> xERROR, 
+	Error=> , 
 	ErrorID=> );
 	
 fbPowerServo(				// Turning power on
@@ -318,7 +429,7 @@ fbPowerServo(				// Turning power on
 	Options:= , 
 	Status=> , 
 	Busy=> , 
-	Error=>xERROR , 
+	Error=> , 
 	ErrorID=> );
 	
 	
@@ -328,7 +439,7 @@ fbResetStep(				//Reseting motor
 	Execute:= xManualReset, 
 	Done=> , 
 	Busy=> , 
-	Error=>xERROR , 
+	Error=> , 
 	ErrorID=> );
 	
 fbPowerStep(				// Turning power on
@@ -341,7 +452,7 @@ fbPowerStep(				// Turning power on
 	Options:= , 
 	Status=> , 
 	Busy=> , 
-	Error=>xERROR , 
+	Error=> , 
 	ErrorID=> );
 	
 	
@@ -359,7 +470,7 @@ fbMoveAbsolute(			// Executing program
 	Busy=> , 
 	Active=> , 
 	CommandAborted=> , 
-	Error=>xERROR , 
+	Error=> , 
 	ErrorID=> );
 fbGearIn(
 		Master:=Master , 
@@ -376,7 +487,7 @@ fbGearIn(
 		Busy=> , 
 		Active=> , 
 		CommandAborted=> , 
-		Error=>xERROR , 
+		Error=> , 
 		ErrorID=> );
 	
 fbGearOut(
@@ -385,7 +496,7 @@ fbGearOut(
 		Options:= , 
 		Done=> , 
 		Busy=> , 
-		Error=>xERROR , 
+		Error=> , 
 		ErrorID=> );
 ]]></ST>
     </Implementation>
@@ -399,25 +510,49 @@ fbGearOut(
       <LineId Id="2040" Count="3" />
       <LineId Id="2045" Count="2" />
       <LineId Id="2049" Count="1" />
+      <LineId Id="2307" Count="0" />
       <LineId Id="2035" Count="0" />
       <LineId Id="2052" Count="0" />
       <LineId Id="2054" Count="0" />
       <LineId Id="1579" Count="0" />
       <LineId Id="1899" Count="0" />
-      <LineId Id="1580" Count="1" />
+      <LineId Id="1580" Count="0" />
       <LineId Id="2135" Count="0" />
       <LineId Id="1582" Count="0" />
       <LineId Id="1584" Count="1" />
       <LineId Id="1898" Count="0" />
-      <LineId Id="1586" Count="6" />
+      <LineId Id="1586" Count="5" />
+      <LineId Id="2308" Count="0" />
+      <LineId Id="1592" Count="0" />
       <LineId Id="1897" Count="0" />
-      <LineId Id="1593" Count="14" />
+      <LineId Id="1593" Count="5" />
+      <LineId Id="2309" Count="0" />
+      <LineId Id="1599" Count="7" />
+      <LineId Id="2310" Count="0" />
+      <LineId Id="1607" Count="0" />
       <LineId Id="1896" Count="0" />
-      <LineId Id="1608" Count="6" />
+      <LineId Id="1608" Count="4" />
+      <LineId Id="2311" Count="0" />
+      <LineId Id="1613" Count="1" />
       <LineId Id="2141" Count="0" />
-      <LineId Id="2164" Count="19" />
+      <LineId Id="2164" Count="7" />
+      <LineId Id="2498" Count="0" />
+      <LineId Id="2172" Count="0" />
+      <LineId Id="2371" Count="0" />
+      <LineId Id="2312" Count="0" />
+      <LineId Id="2372" Count="1" />
+      <LineId Id="2381" Count="0" />
+      <LineId Id="2173" Count="10" />
+      <LineId Id="2377" Count="2" />
+      <LineId Id="2313" Count="0" />
+      <LineId Id="2380" Count="0" />
       <LineId Id="2143" Count="0" />
-      <LineId Id="2185" Count="21" />
+      <LineId Id="2185" Count="10" />
+      <LineId Id="2386" Count="3" />
+      <LineId Id="2315" Count="0" />
+      <LineId Id="2196" Count="10" />
+      <LineId Id="2390" Count="3" />
+      <LineId Id="2316" Count="0" />
       <LineId Id="2184" Count="0" />
       <LineId Id="2207" Count="2" />
       <LineId Id="2213" Count="0" />
@@ -425,70 +560,117 @@ fbGearOut(
       <LineId Id="1615" Count="0" />
       <LineId Id="1906" Count="2" />
       <LineId Id="1617" Count="5" />
-      <LineId Id="1631" Count="2" />
+      <LineId Id="1631" Count="1" />
+      <LineId Id="2318" Count="0" />
+      <LineId Id="1633" Count="0" />
       <LineId Id="1895" Count="0" />
-      <LineId Id="1634" Count="5" />
+      <LineId Id="1634" Count="4" />
+      <LineId Id="2319" Count="0" />
+      <LineId Id="1639" Count="0" />
       <LineId Id="1894" Count="0" />
       <LineId Id="1640" Count="0" />
       <LineId Id="1986" Count="0" />
       <LineId Id="1642" Count="4" />
-      <LineId Id="1655" Count="3" />
+      <LineId Id="1655" Count="2" />
+      <LineId Id="2394" Count="2" />
+      <LineId Id="2398" Count="1" />
+      <LineId Id="2397" Count="0" />
+      <LineId Id="2320" Count="0" />
+      <LineId Id="1658" Count="0" />
       <LineId Id="1893" Count="0" />
       <LineId Id="1659" Count="0" />
       <LineId Id="1985" Count="0" />
       <LineId Id="2016" Count="0" />
       <LineId Id="1806" Count="2" />
       <LineId Id="1946" Count="0" />
-      <LineId Id="1671" Count="2" />
+      <LineId Id="1671" Count="1" />
+      <LineId Id="2401" Count="5" />
+      <LineId Id="2400" Count="0" />
+      <LineId Id="1673" Count="0" />
       <LineId Id="1891" Count="0" />
       <LineId Id="1674" Count="0" />
       <LineId Id="1922" Count="0" />
       <LineId Id="1675" Count="0" />
       <LineId Id="2025" Count="0" />
-      <LineId Id="1676" Count="4" />
+      <LineId Id="1676" Count="3" />
+      <LineId Id="2321" Count="0" />
+      <LineId Id="1680" Count="0" />
       <LineId Id="1892" Count="0" />
       <LineId Id="1681" Count="0" />
       <LineId Id="2029" Count="0" />
       <LineId Id="2026" Count="0" />
       <LineId Id="1683" Count="1" />
-      <LineId Id="1688" Count="2" />
+      <LineId Id="1688" Count="1" />
+      <LineId Id="2322" Count="0" />
+      <LineId Id="1690" Count="0" />
       <LineId Id="1902" Count="0" />
       <LineId Id="1890" Count="0" />
       <LineId Id="1910" Count="11" />
+      <LineId Id="2323" Count="0" />
       <LineId Id="1900" Count="0" />
       <LineId Id="1923" Count="5" />
+      <LineId Id="2324" Count="0" />
       <LineId Id="1901" Count="0" />
-      <LineId Id="1931" Count="11" />
+      <LineId Id="1931" Count="10" />
+      <LineId Id="2408" Count="5" />
+      <LineId Id="2407" Count="0" />
+      <LineId Id="1942" Count="0" />
       <LineId Id="1929" Count="0" />
       <LineId Id="1987" Count="0" />
       <LineId Id="1989" Count="0" />
       <LineId Id="2017" Count="0" />
       <LineId Id="1990" Count="2" />
       <LineId Id="1996" Count="2" />
+      <LineId Id="2415" Count="5" />
+      <LineId Id="2414" Count="0" />
       <LineId Id="1988" Count="0" />
       <LineId Id="1930" Count="0" />
       <LineId Id="1999" Count="0" />
       <LineId Id="2001" Count="1" />
       <LineId Id="2027" Count="0" />
-      <LineId Id="2003" Count="7" />
+      <LineId Id="2003" Count="3" />
+      <LineId Id="2325" Count="0" />
+      <LineId Id="2007" Count="1" />
+      <LineId Id="2262" Count="0" />
+      <LineId Id="2009" Count="1" />
       <LineId Id="2028" Count="0" />
       <LineId Id="2011" Count="3" />
+      <LineId Id="2326" Count="0" />
       <LineId Id="2000" Count="0" />
       <LineId Id="2015" Count="0" />
+      <LineId Id="2466" Count="2" />
+      <LineId Id="2446" Count="0" />
+      <LineId Id="2436" Count="0" />
+      <LineId Id="2430" Count="0" />
+      <LineId Id="2437" Count="2" />
+      <LineId Id="2450" Count="0" />
+      <LineId Id="2449" Count="0" />
+      <LineId Id="2431" Count="4" />
+      <LineId Id="2427" Count="0" />
+      <LineId Id="2451" Count="0" />
+      <LineId Id="2424" Count="0" />
+      <LineId Id="2461" Count="3" />
+      <LineId Id="2460" Count="0" />
+      <LineId Id="2453" Count="6" />
+      <LineId Id="2452" Count="0" />
+      <LineId Id="2465" Count="0" />
+      <LineId Id="2425" Count="0" />
+      <LineId Id="2470" Count="7" />
+      <LineId Id="2421" Count="0" />
+      <LineId Id="2485" Count="5" />
+      <LineId Id="2422" Count="0" />
+      <LineId Id="2491" Count="0" />
       <LineId Id="1691" Count="0" />
       <LineId Id="2087" Count="0" />
       <LineId Id="2121" Count="0" />
       <LineId Id="2137" Count="0" />
+      <LineId Id="2492" Count="0" />
       <LineId Id="2130" Count="0" />
-      <LineId Id="2127" Count="0" />
-      <LineId Id="2129" Count="0" />
-      <LineId Id="2084" Count="0" />
       <LineId Id="2128" Count="0" />
-      <LineId Id="2131" Count="0" />
-      <LineId Id="2133" Count="0" />
-      <LineId Id="2132" Count="0" />
+      <LineId Id="2131" Count="1" />
       <LineId Id="2136" Count="0" />
       <LineId Id="1695" Count="1" />
+      <LineId Id="2260" Count="0" />
       <LineId Id="2033" Count="0" />
       <LineId Id="1698" Count="87" />
       <LineId Id="45" Count="0" />
