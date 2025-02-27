@@ -35,7 +35,7 @@ TYPE E_MC :
 	
 	DecoupleCallOnReset,
 	DecoupleEffectOnReset,	
-	RestartCallOnReset,
+	RestartCallOnReset,    // zmienić na reset
 	RestartEffectOnReset,	
 	
 	Error

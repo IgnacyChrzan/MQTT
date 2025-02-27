@@ -23,7 +23,7 @@ VAR
 	xManualReset	 : 		BOOL; // Resetting program
 	xPowerOn	:			BOOL; //Enabling power sources
 	xExecute	:			BOOL; // Executing program
-	eStateMc 	: 			E_MC ;//instance of enum
+	eStateMc 	: 			E_MC ;		//instance of enum
 	eStatePrevious	:		E_MC;
 	xStepIsMaster		:		BOOL;
 	xStepIsSlave	:		BOOL;
@@ -51,13 +51,13 @@ fTriggerReset(CLK:=xButton_NO1 , Q=>xResetErrors );
 fTriggerHome(CLK:=xButton_NO3 , Q=>xHomeMotors );
 lrRealPosition:=ServoAxis.NcToPlc.ActPos;
 // Timer in each case
-IF (eStateMc <> E_MC.Idle) AND (eStateMc <> E_MC.Error)  THEN
+IF (eStateMc <> E_MC.Idle) AND (eStateMc <> E_MC.Error) AND (eStateMc <> E_MC.Execute) THEN
 	IF eStateMc <> eStatePrevious THEN			// Comparing  current and previous values of enum
 		tonTooLongInCase(IN := FALSE); 			// Reseting clock
 		eStatePrevious := eStateMc; 			// timeout string
 	END_IF
 
-	tonTooLongInCase(IN := TRUE, PT :=T#20S);
+	tonTooLongInCase(IN := TRUE, PT :=T#15S);
 	
 	IF tonTooLongInCase.Q THEN
 		eStateMc := E_MC.Error; 
@@ -214,7 +214,7 @@ CASE eStateMc OF
 		END_IF
 		IF fbMoveAbsolute.Error THEN
 			eStateMc:=E_MC.Error;
-			IF StepAxis.Status.ErrorID=16#00004650 THEN
+			IF StepAxis.Status.ErrorID=16#00004650 THEN				// usunąc zera i zobaczyć czy działa
 				sErrorLocalization:=CONCAT(CONCAT('Error in step motor movement(MoveAbsCallStepMaster) ErrorID: ',UDINT_TO_STRING(StepAxis.Status.ErrorID)),' Drive hardware not ready to operate');
 			ELSIF ServoAxis.Status.ErrorID=16#00004650 THEN
 				sErrorLocalization:=CONCAT(CONCAT('Error in servo motor movement(MoveAbsCallStepMaster) ErrorID: ',UDINT_TO_STRING(ServoAxis.Status.ErrorID)),' Drive hardware not ready to operate');
@@ -249,7 +249,7 @@ CASE eStateMc OF
 			eStateMc:=E_MC.DecoupleEffectStepMaster;		
 		ELSIF fbGearOut.Error THEN
 			eStateMc:=E_MC.Error;
-			sErrorLocalization:='Error decoupling motors(DecoupleCallStepMaster)';
+			sErrorLocalization:=CONCAT('Error decoupling motors	:	',TO_STRING(eStateMc));   // zmienić (attribute to string)
 		END_IF	
 		
 	E_MC.DecoupleEffectStepMaster:
